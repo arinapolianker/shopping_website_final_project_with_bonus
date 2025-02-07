@@ -1,0 +1,138 @@
+import time
+
+import streamlit as st
+
+register_user = st.session_state.functions['register_user']
+get_jwt_token = st.session_state.functions['get_jwt_token']
+get_user = st.session_state.functions['get_user']
+logout_user = st.session_state.functions['logout_user']
+delete_user_by_id = st.session_state.functions['delete_user_by_id']
+
+if 'jwt_token' not in st.session_state:
+    st.session_state['jwt_token'] = None
+if "user_id" not in st.session_state:
+    st.session_state["user_id"] = None
+if 'show_registration_form' not in st.session_state:
+    st.session_state['show_registration_form'] = False
+if 'show_login_form' not in st.session_state:
+    st.session_state['show_login_form'] = False
+
+st.set_page_config(
+    page_title="Account",
+    page_icon="📝",
+    layout="centered",
+)
+
+st.title("User Management🔐")
+
+user_id = st.session_state.get('user_id')
+token = st.session_state.get('jwt_token')
+
+if user_id and token:
+    user_details = get_user(user_id, token)
+    if user_details:
+        st.markdown("""
+                    <div style='padding: 1rem; background-color: #f0f2f6; border-radius: 10px; margin-bottom: 1rem'>
+                        <h3>👋 Welcome, {}</h3>
+                    </div>
+                """.format(user_details['first_name']), unsafe_allow_html=True)
+    else:
+        st.warning("⚠️Session expired or invalid. Please log in again.")
+        st.session_state['jwt_token'] = None
+        st.session_state['user_id'] = None
+
+left_col, right_col = st.columns(2)
+with left_col:
+    if not st.session_state.get('jwt_token'):
+        if st.button("Register here📝", key="toggle_register_form", use_container_width=True):
+            st.session_state.show_registration_form = not st.session_state.show_registration_form
+            st.session_state.show_login_form = False
+
+        if st.session_state.show_registration_form:
+            st.markdown("### Create New Account")
+            st.subheader("Personal Information")
+            col1, col2 = st.columns(2)
+            with col1:
+                first_name = st.text_input("First Name", key="register_firstname")
+                last_name = st.text_input("Last Name", key="register_lastname")
+                phone = st.text_input("Phone", key="register_phone")
+            with col2:
+                email = st.text_input("Email", key="register_email")
+                username = st.text_input("Username", key="register_username")
+                password = st.text_input("Password", type='password', key="register_password")
+
+            st.subheader("Address Information")
+            address = st.text_input("Street Address", key="register_address")
+            city_col, country_col = st.columns(2)
+            with city_col:
+                city = st.text_input("City", key="register_city")
+            with country_col:
+                country = st.text_input("Country", key="register_country")
+
+            if st.button("Create Account", type="primary", use_container_width=True):
+                register_response = register_user(first_name, last_name, email, phone, address, country, city, username, password)
+                if register_response.status_code == 201:
+                    st.success("Registered successfully!")
+                    st.session_state['registration_success'] = True
+                    st.session_state['username'] = username
+                    st.session_state['password'] = password
+                    st.session_state.show_registration_form = False
+                    time.sleep(2)
+                    jwt_token, user_id = get_jwt_token(username, password)
+                    st.session_state['jwt_token'] = jwt_token
+                    st.session_state['user_id'] = user_id
+                    st.switch_page("Home.py")
+                elif register_response.status_code == 400:
+                    st.error("The username is already taken. Please choose a different username.")
+                else:
+                    st.error("Registration failed. Please check the provided details.")
+
+with right_col:
+    if not st.session_state.get('jwt_token'):
+        if st.button(" Login🔑", key="toggle_login_form", use_container_width=True):
+            st.session_state.show_login_form = not st.session_state.show_login_form
+            st.session_state.show_registration_form = False
+
+        if st.session_state.show_login_form:
+            st.markdown("### Welcome Back!")
+            login_username = st.text_input("Username", key="login_username")
+            login_password = st.text_input("Password", type='password', key="login_password")
+
+            if st.button("Log In", type="primary", use_container_width=True):
+                jwt_token, user_id = get_jwt_token(login_username, login_password)
+                if jwt_token:
+                    st.session_state['jwt_token'] = jwt_token
+                    st.session_state['user_id'] = user_id
+                    st.success("Logged in successfully!")
+                    time.sleep(2)
+                    st.session_state.show_login_form = False
+                    st.switch_page("Home.py")
+                else:
+                    st.error("Login failed. Please check your username and password and try again.")
+
+if user_id and token:
+    st.markdown("### Account Actions")
+    action_col1, action_col2 = st.columns(2)
+
+    with action_col1:
+        if st.button(" Logout🚪", use_container_width=True, type="secondary"):
+            logout_user(token)
+            st.session_state['jwt_token'] = None
+            st.session_state['user_id'] = None
+            st.success("Logged out successfully!")
+            st.rerun()
+
+    with action_col2:
+        if not st.session_state.get("show_delete_confirmation", False):
+            if st.button("Delete Account❌", use_container_width=True, type="secondary"):
+                st.session_state["show_delete_confirmation"] = True
+                st.rerun()
+        else:
+            if st.checkbox("I understand this action cannot be undone", key="delete_confirmation"):
+                if st.button("Confirm Delete Account", key="open_delete_confirmation"):
+                    delete_user_by_id(user_id, token)
+                    st.session_state['jwt_token'] = None
+                    st.session_state['user_id'] = None
+                    st.success("User deleted successfully!")
+                    st.session_state["show_delete_confirmation"] = False
+                    st.rerun()

@@ -1,0 +1,7 @@
+venv/
+.idea/
+**/__pycache__/
+External Libraries/
+**/__init__.py
+*.pyc
+__pycache__/
